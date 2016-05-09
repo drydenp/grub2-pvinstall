@@ -62,6 +62,13 @@ struct grub_lvm_pv_header {
   struct grub_lvm_disk_locn disk_areas_xl[0];	/* Two lists */
 } GRUB_PACKED;
 
+struct grub_lvm_pv_header_ext {
+  grub_uint32_t version_xl;
+  grub_uint32_t flags_xl;
+  /* NULL-terminated list of bootloader embedding areas */
+  struct grub_lvm_disk_locn disk_areas_xl[0];
+} __attribute__ ((packed));
+
 #define GRUB_LVM_FMTT_MAGIC "\040\114\126\115\062\040\170\133\065\101\045\162\060\116\052\076"
 #define GRUB_LVM_FMTT_VERSION 1
 #define GRUB_LVM_MDA_HEADER_SIZE 512

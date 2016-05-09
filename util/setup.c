@@ -398,7 +398,7 @@ SETUP (const char *dir,
       .container = dest_dev->disk->partition,
       .multiple_partmaps = 0
     };
-    int is_ldm;
+    int is_ldm, is_lvm;
     grub_err_t err;
     grub_disk_addr_t *sectors;
     int i;
@@ -431,15 +431,17 @@ SETUP (const char *dir,
       grub_errno = GRUB_ERR_NONE;
 
     is_ldm = grub_util_is_ldm (dest_dev->disk);
+    is_lvm = grub_util_is_lvm (dest_dev->disk);
 
     if (fs_probe)
       {
-	if (!fs && !ctx.dest_partmap)
-	  grub_util_error (_("unable to identify a filesystem in %s; safety check can't be performed"),
-			   dest_dev->disk->name);
-	if (fs && !fs->reserved_first_sector)
-	  /* TRANSLATORS: Filesystem may reserve the space just GRUB isn't sure about it.  */
-	  grub_util_error (_("%s appears to contain a %s filesystem which isn't known to "
+        /* Doubt there can be any FS signature on LVM? */
+        if (!is_lvm && !fs && !ctx.dest_partmap)
+          grub_util_error (_("unable to identify a filesystem in %s; safety check can't be performed"), dest_dev->disk->name);
+
+        if (fs && !fs->reserved_first_sector)
+          /* TRANSLATORS: Filesystem may reserve the space just GRUB isn't sure about it. */
+          grub_util_error (_("%s appears to contain a %s filesystem which isn't known to "
 			     "reserve space for DOS-style boot.  Installing GRUB there could "
 			     "result in FILESYSTEM DESTRUCTION if valuable data is overwritten "
 			     "by grub-setup (--skip-fs-probe disables this "
@@ -470,12 +472,12 @@ SETUP (const char *dir,
 
       }
 
-    if (! ctx.dest_partmap && ! fs && !is_ldm)
+    if (! ctx.dest_partmap && ! fs && !is_ldm && !is_lvm)
       {
 	grub_util_warn ("%s", _("Attempting to install GRUB to a partitionless disk or to a partition.  This is a BAD idea."));
 	goto unable_to_embed;
       }
-    if (ctx.multiple_partmaps || (ctx.dest_partmap && fs) || (is_ldm && fs))
+    if (ctx.multiple_partmaps || (ctx.dest_partmap && fs) || ((is_ldm || is_lvm) && fs))
       {
 	grub_util_warn ("%s", _("Attempting to install GRUB to a disk with multiple partition labels.  This is not supported yet."));
 	goto unable_to_embed;
@@ -507,7 +509,10 @@ SETUP (const char *dir,
       maxsec = ((0x78000 - GRUB_KERNEL_I386_PC_LINK_ADDR)
 		>> GRUB_DISK_SECTOR_BITS);
 
-    if (is_ldm)
+    if (is_lvm)
+      err = grub_util_lvm_embed (dest_dev->disk, &nsec, maxsec,
+                                GRUB_EMBED_PCBIOS, &sectors);
+    else if (is_ldm)
       err = grub_util_ldm_embed (dest_dev->disk, &nsec, maxsec,
 				 GRUB_EMBED_PCBIOS, &sectors);
     else if (ctx.dest_partmap)
@@ -608,7 +613,7 @@ unable_to_embed:
 
   if (dest_dev->disk->dev->id != root_dev->disk->dev->id)
     grub_util_error ("%s", _("embedding is not possible, but this is required for "
-			     "RAID and LVM install"));
+			     "LVM and RAID install"));
 
   {
     grub_fs_t fs;

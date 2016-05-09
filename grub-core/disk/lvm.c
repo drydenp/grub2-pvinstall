@@ -95,6 +95,78 @@ grub_lvm_check_flag (char *p, const char *str, const char *flag)
     }
 }
 
+/**
+ * Attribute function obtaining PV header from disk. Currently scans the
+ * first 4 sectors and returns anything found in either of those sectors.
+ *
+ * Sets *first_sector to 1 if header was in first sector, 0 otherwise.
+ * May print first_sector info message if verbose was set.
+ *
+ * Returns header if found, NULL otherwise. Also returns header if first_sector.
+ */
+static struct grub_lvm_pv_header *
+grub_lvm_get_pvh_at(grub_disk_t disk, char buf[static GRUB_LVM_LABEL_SIZE], 
+#ifdef GRUB_UTIL
+    int *first_sector, int verbose
+#else
+    int *first_sector
+#endif
+  )
+
+{
+  struct grub_lvm_label_header *lh = (struct grub_lvm_label_header *) buf;
+  unsigned int i;
+
+  /* Search for label. */
+  for (i = 0; i < GRUB_LVM_LABEL_SCAN_SECTORS; i++)
+    {
+      if (grub_disk_read (disk, i, 0, GRUB_LVM_LABEL_SIZE, buf))
+        return NULL;
+
+      if ((! grub_strncmp ((char *)lh->id, GRUB_LVM_LABEL_ID,
+                          sizeof (lh->id)))
+         && (! grub_strncmp ((char *)lh->type, GRUB_LVM_LVM2_LABEL,
+                             sizeof (lh->type))))
+       break;
+    }
+
+#ifdef GRUB_UTIL
+  if (first_sector) *first_sector = 0;
+#endif
+
+  /* Return if we didn't find a label. */
+  if (i == GRUB_LVM_LABEL_SCAN_SECTORS)
+    {
+#ifdef GRUB_UTIL
+      grub_util_info ("no LVM signature found");
+#endif
+      return NULL;
+    }
+  else if (i == 0)
+    {
+#ifdef GRUB_UTIL
+      if (verbose) grub_util_info ("LVM signature in first sector");
+#endif
+      if (first_sector) *first_sector = 1;
+    }
+
+  return (struct grub_lvm_pv_header *) (buf + grub_le_to_cpu32(lh->offset_xl));
+}
+
+static inline struct grub_lvm_pv_header *grub_lvm_get_pvh(grub_disk_t disk, char buf[static GRUB_LVM_LABEL_SIZE]) 
+{
+#ifdef GRUB_UTIL
+  return grub_lvm_get_pvh_at(disk, buf, NULL, 0);
+#else
+  return grub_lvm_get_pvh_at(disk, buf, NULL);
+#endif
+}
+
+/**
+ * Preexisting function that detects the LVM PV header from disk and proceeds
+ * to fill in VG datastructures. Called from diskfilter as part of the
+ * "driver->detect" functionality.
+ */
 static struct grub_diskfilter_vg * 
 grub_lvm_detect (grub_disk_t disk,
 		 struct grub_diskfilter_pv_id *id,
@@ -106,7 +178,6 @@ grub_lvm_detect (grub_disk_t disk,
   char vg_id[GRUB_LVM_ID_STRLEN+1];
   char pv_id[GRUB_LVM_ID_STRLEN+1];
   char *metadatabuf, *p, *q, *vgname;
-  struct grub_lvm_label_header *lh = (struct grub_lvm_label_header *) buf;
   struct grub_lvm_pv_header *pvh;
   struct grub_lvm_disk_locn *dlocn;
   struct grub_lvm_mda_header *mdah;
@@ -116,30 +187,9 @@ grub_lvm_detect (grub_disk_t disk,
   struct grub_diskfilter_vg *vg;
   struct grub_diskfilter_pv *pv;
 
-  /* Search for label. */
-  for (i = 0; i < GRUB_LVM_LABEL_SCAN_SECTORS; i++)
-    {
-      err = grub_disk_read (disk, i, 0, sizeof(buf), buf);
-      if (err)
-	goto fail;
-
-      if ((! grub_strncmp ((char *)lh->id, GRUB_LVM_LABEL_ID,
-			   sizeof (lh->id)))
-	  && (! grub_strncmp ((char *)lh->type, GRUB_LVM_LVM2_LABEL,
-			      sizeof (lh->type))))
-	break;
-    }
-
-  /* Return if we didn't find a label. */
-  if (i == GRUB_LVM_LABEL_SCAN_SECTORS)
-    {
-#ifdef GRUB_UTIL
-      grub_util_info ("no LVM signature found");
-#endif
-      goto fail;
-    }
-
-  pvh = (struct grub_lvm_pv_header *) (buf + grub_le_to_cpu32(lh->offset_xl));
+  pvh = grub_lvm_get_pvh(disk, buf);
+  if (!pvh)
+    goto fail;
 
   for (i = 0, j = 0; i < GRUB_LVM_ID_LEN; i++)
     {
@@ -776,6 +826,112 @@ grub_lvm_detect (grub_disk_t disk,
   return NULL;
 }
 
+#ifdef GRUB_UTIL
+/**
+ * Requests physical volume from disk and checks whether relations hold up?
+ *
+ * This function only returns true iff a volume group was found
+ */
+int grub_util_has_lvm_vg (grub_disk_t disk)
+{
+  struct grub_diskfilter_pv *pv = NULL;
+  struct grub_diskfilter_vg *vg = NULL;
+
+  pv = grub_diskfilter_get_pv_from_disk(disk, &vg);
+  return pv && vg && vg == vg->driver->detect(disk, &pv->id, &pv->start_sector)
+         ? 1 : 0;
+}
+
+/**
+ * Does nothing other than scanning the first 4 sectors of the device for
+ * a LVM PV header
+ */
+int grub_util_is_lvm (grub_disk_t disk)
+{
+  char buf[GRUB_LVM_LABEL_SIZE];
+  return grub_lvm_get_pvh(disk, buf) ? 1 : 0;
+}
+
+/**
+ * This function embeds the bootloader inside an LVM PV bootloaderarea
+ * specified by --bootloaderareasize on the pvcreate command line.
+ *
+ * It is called from setup.c and returns an error message to the caller,
+ * that gets treated as a warning, if it fails.
+*/
+
+grub_err_t
+grub_util_lvm_embed (struct grub_disk *disk, unsigned int *nsectors,
+                    unsigned int max_nsectors,
+                    grub_embed_type_t embed_type,
+                    grub_disk_addr_t **sectors)
+{
+  char buf[GRUB_LVM_LABEL_SIZE];
+  struct grub_lvm_pv_header *pvh;
+  struct grub_lvm_pv_header_ext *pvh_ext;
+  struct grub_diskfilter_vg *vg = NULL;
+  struct grub_lvm_disk_locn *dlocn;
+  grub_uint64_t ba_offset, ba_size, ba_start_sector;
+  unsigned int i;
+  int first_sector;
+
+  if (embed_type != GRUB_EMBED_PCBIOS)
+    return grub_error (GRUB_ERR_NOT_IMPLEMENTED_YET,
+                      "LVM curently supports only PC-BIOS embedding");
+#ifdef GRUB_UTIL
+  pvh = grub_lvm_get_pvh_at(disk, buf, &first_sector, 1);
+#else
+  pvh = grub_lvm_get_pvh_at(disk, buf, &first_sector);
+#endif
+  /* if pvh is NULL, we probably have a bug */
+  if (!pvh)
+    return grub_error (GRUB_ERR_BUG, "trying to install on non-existing PV header, but should already have been prevented by initial screening");
+
+  if (first_sector)
+    return grub_error (GRUB_ERR_BAD_DEVICE, "PV detected inside boot sector, but we need the boot sector to install in");
+
+  /* for some reason the bootloaderarea check will fail if we don't do this here */
+  grub_diskfilter_get_pv_from_disk(disk, &vg);
+
+  dlocn = pvh->disk_areas_xl;
+
+  /* skip past the data area list */
+  while (dlocn->offset)
+    dlocn++;
+  dlocn++;
+  /* and the metadata area list */
+  while (dlocn->offset)
+    dlocn++;
+  dlocn++;
+
+  pvh_ext = (struct grub_lvm_pv_header_ext*)dlocn;
+  if (!pvh_ext->version_xl)
+    return grub_error (GRUB_ERR_BAD_DEVICE, "trying to install on LVM PV but it does not have a bootloader area to embed in. Check pvcreate --bootloaderareasize");
+
+  dlocn = pvh_ext->disk_areas_xl;
+  ba_offset = grub_le_to_cpu64 (dlocn->offset);
+  ba_size = grub_le_to_cpu64 (dlocn->size);
+  if (!(ba_offset && ba_size))
+    return grub_error (GRUB_ERR_BAD_DEVICE, "trying to install on LVM PV but it does not have a bootloader area to embed in. Check pvcreate --bootloaderareasize");
+  /* could be worked around with extra arithmetic if this actually happens */
+  if (ba_offset % GRUB_DISK_SECTOR_SIZE)
+    return grub_error (
+      GRUB_ERR_BAD_DEVICE, "LVM bootloader area is not aligned on sector boundaries (%d)", GRUB_DISK_SECTOR_SIZE);
+  ba_start_sector = ba_offset / GRUB_DISK_SECTOR_SIZE;
+
+  *nsectors = ba_size / GRUB_DISK_SECTOR_SIZE;
+  if (*nsectors > max_nsectors)
+    *nsectors = max_nsectors;
+
+  *sectors = grub_malloc (*nsectors * sizeof (**sectors));
+  if (!*sectors)
+    return grub_errno;
+  for (i = 0; i < *nsectors; i++)
+    (*sectors)[i] = ba_start_sector + i;
+
+  return GRUB_ERR_NONE;
+}
+#endif
 
 
 static struct grub_diskfilter grub_lvm_dev = {

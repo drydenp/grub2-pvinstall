@@ -75,6 +75,9 @@ struct grub_diskfilter_pv {
 #ifdef GRUB_UTIL
   char **partmaps;
 #endif
+  /* Optional bootloader embedding area */
+  grub_uint64_t ba_offset;
+  grub_uint64_t ba_size;
 };
 
 struct grub_diskfilter_lv {
