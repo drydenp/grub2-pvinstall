@@ -47,8 +47,8 @@ grub_util_get_ldm (grub_disk_t disk, grub_disk_addr_t start);
 int
 grub_util_is_ldm (grub_disk_t disk);
 #ifdef GRUB_UTIL
+int grub_util_has_lvm_pv (grub_disk_t disk);
 int grub_util_is_lvm (grub_disk_t disk);
-int grub_util_has_lvm_vg (grub_disk_t disk);
 
 grub_err_t
 grub_util_lvm_embed (struct grub_disk *disk, unsigned int *nsectors,

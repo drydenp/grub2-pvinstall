@@ -106,12 +106,7 @@ grub_lvm_check_flag (char *p, const char *str, const char *flag)
  */
 static struct grub_lvm_pv_header *
 grub_lvm_get_pvh_at(grub_disk_t disk, char buf[static GRUB_LVM_LABEL_SIZE], 
-#ifdef GRUB_UTIL
-    int *first_sector, int verbose
-#else
-    int *first_sector
-#endif
-  )
+                    int *first_sector)
 
 {
   struct grub_lvm_label_header *lh = (struct grub_lvm_label_header *) buf;
@@ -124,7 +119,7 @@ grub_lvm_get_pvh_at(grub_disk_t disk, char buf[static GRUB_LVM_LABEL_SIZE],
         return NULL;
 
       if ((! grub_strncmp ((char *)lh->id, GRUB_LVM_LABEL_ID,
-                          sizeof (lh->id)))
+                           sizeof (lh->id)))
          && (! grub_strncmp ((char *)lh->type, GRUB_LVM_LVM2_LABEL,
                              sizeof (lh->type))))
        break;
@@ -145,7 +140,9 @@ grub_lvm_get_pvh_at(grub_disk_t disk, char buf[static GRUB_LVM_LABEL_SIZE],
   else if (i == 0)
     {
 #ifdef GRUB_UTIL
-      if (verbose) grub_util_info ("LVM signature in first sector");
+      /* currently only prints when the caller requests first_sector information
+         e.g. this happens when installing, but not before */
+      if (first_sector) grub_util_info ("LVM signature in first sector");
 #endif
       if (first_sector) *first_sector = 1;
     }
@@ -153,13 +150,17 @@ grub_lvm_get_pvh_at(grub_disk_t disk, char buf[static GRUB_LVM_LABEL_SIZE],
   return (struct grub_lvm_pv_header *) (buf + grub_le_to_cpu32(lh->offset_xl));
 }
 
-static inline struct grub_lvm_pv_header *grub_lvm_get_pvh(grub_disk_t disk, char buf[static GRUB_LVM_LABEL_SIZE]) 
+/**
+ * Convenience wrapper that does not require a parameter to be passed. The parameter
+ * indicates a return value for first_sector. Callers may care or may not care where
+ * the PV header has been found. Currently the thing will only bug out when actually
+ * installing, or the information needs to be passed down to grub_lvm_has_pv as a
+ * return value */
+
+static inline struct grub_lvm_pv_header *
+grub_lvm_get_pvh(grub_disk_t disk, char buf[static GRUB_LVM_LABEL_SIZE])
 {
-#ifdef GRUB_UTIL
-  return grub_lvm_get_pvh_at(disk, buf, NULL, 0);
-#else
   return grub_lvm_get_pvh_at(disk, buf, NULL);
-#endif
 }
 
 /**
@@ -828,11 +829,9 @@ grub_lvm_detect (grub_disk_t disk,
 
 #ifdef GRUB_UTIL
 /**
- * Requests physical volume from disk and checks whether relations hold up?
- *
- * This function only returns true iff a volume group was found
+ * Request VG from disk and return true on valid
  */
-int grub_util_has_lvm_vg (grub_disk_t disk)
+int grub_util_is_lvm (grub_disk_t disk)
 {
   struct grub_diskfilter_pv *pv = NULL;
   struct grub_diskfilter_vg *vg = NULL;
@@ -843,21 +842,20 @@ int grub_util_has_lvm_vg (grub_disk_t disk)
 }
 
 /**
- * Does nothing other than scanning the first 4 sectors of the device for
- * a LVM PV header
+ * Checks whether there is an LVM PV header in the first 4 sectors of the device
  */
-int grub_util_is_lvm (grub_disk_t disk)
+int grub_util_has_lvm_pv (grub_disk_t disk)
 {
   char buf[GRUB_LVM_LABEL_SIZE];
   return grub_lvm_get_pvh(disk, buf) ? 1 : 0;
 }
 
 /**
- * This function embeds the bootloader inside an LVM PV bootloaderarea
- * specified by --bootloaderareasize on the pvcreate command line.
+ * Embed the bootloader inside an LVM PV bootloaderarea specified by
+ * --bootloaderareasize on the pvcreate command line.
  *
- * It is called from setup.c and returns an error message to the caller,
- * that gets treated as a warning, if it fails.
+ * This gets called from setup.c and returns a grub_err_t struct which, upon
+ * failure, gets treated as a warning error message.
 */
 
 grub_err_t
@@ -885,12 +883,17 @@ grub_util_lvm_embed (struct grub_disk *disk, unsigned int *nsectors,
 #endif
   /* if pvh is NULL, we probably have a bug */
   if (!pvh)
-    return grub_error (GRUB_ERR_BUG, "trying to install on non-existing PV header, but should already have been prevented by initial screening");
+    return grub_error (GRUB_ERR_BUG, "attempt to install on non-existent PV header (should not happen)");
 
   if (first_sector)
-    return grub_error (GRUB_ERR_BAD_DEVICE, "PV detected inside boot sector, but we need the boot sector to install in");
+    return grub_error (GRUB_ERR_BAD_DEVICE, "the boot sector needs to be free; PV header found in first sector of the device");
 
-  /* for some reason the bootloaderarea check will fail if we don't do this here */
+  /* I have seen the bootloaderarea check fail if we do not request the VG here (even though
+   * a VG is not required to exist prior to installation of the bootloader). The original patch
+   * used this function to acquire the PV header but I have already acquired it using the above
+   * call in order to be able to grub_error with relevant information. This needs to be verified.
+   * In any case, the return values are not used.
+   */
   grub_diskfilter_get_pv_from_disk(disk, &vg);
 
   dlocn = pvh->disk_areas_xl;
@@ -906,13 +909,13 @@ grub_util_lvm_embed (struct grub_disk *disk, unsigned int *nsectors,
 
   pvh_ext = (struct grub_lvm_pv_header_ext*)dlocn;
   if (!pvh_ext->version_xl)
-    return grub_error (GRUB_ERR_BAD_DEVICE, "trying to install on LVM PV but it does not have a bootloader area to embed in. Check pvcreate --bootloaderareasize");
+    return grub_error (GRUB_ERR_BAD_DEVICE, "this PV does not have a bootloader area. Ensure creation of it using pvcreate --bootloaderareasize 1M");
 
   dlocn = pvh_ext->disk_areas_xl;
   ba_offset = grub_le_to_cpu64 (dlocn->offset);
   ba_size = grub_le_to_cpu64 (dlocn->size);
   if (!(ba_offset && ba_size))
-    return grub_error (GRUB_ERR_BAD_DEVICE, "trying to install on LVM PV but it does not have a bootloader area to embed in. Check pvcreate --bootloaderareasize");
+    return grub_error (GRUB_ERR_BAD_DEVICE, "this PV does not have a bootloader area. Ensure creation of it using pvcreate --bootloaderareasize 1M");
   /* could be worked around with extra arithmetic if this actually happens */
   if (ba_offset % GRUB_DISK_SECTOR_SIZE)
     return grub_error (
@@ -930,6 +933,16 @@ grub_util_lvm_embed (struct grub_disk *disk, unsigned int *nsectors,
     (*sectors)[i] = ba_start_sector + i;
 
   return GRUB_ERR_NONE;
+
+  /**
+   * It is possible for junk to remain from a previous pvcreate call that *did* use --bootloaderarea size
+   * which hasn't been overwritten by a *new* pvcreate call WITHOUT that bootloader area being created.
+   * The above code is getting fooled by this remaining junk in thinking that a valid bootloader area is
+   * present when it is NOT so. Although during normal use this would perhaps never happen, it is now
+   * required to zero the PV header and/or subsequent sectors but I have no knowledge of the format at
+   * present, this is not my patch originally. GRUB may therefore install on an invalid PV that could
+   * corrupt its actual data structures (e.g. the beginning of the VG, for example).
+   */
 }
 #endif
 

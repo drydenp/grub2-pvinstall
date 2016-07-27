@@ -430,14 +430,24 @@ SETUP (const char *dir,
     if (!fs)
       grub_errno = GRUB_ERR_NONE;
 
+    /* I am just including this here to show the difference between a VG and no VG needed for installation. */
+    #define GRUB_SETUP_NEED_VG 0
+
     is_ldm = grub_util_is_ldm (dest_dev->disk);
-    is_lvm = grub_util_is_lvm (dest_dev->disk);
+    is_lvm = grub_util_has_lvm_pv (dest_dev->disk);
+    #if GRUB_SETUP_NEED_VG == 1
+    if (is_lvm && !grub_util_is_lvm (dest_dev->disk))
+      {
+        grub_util_warn ("%s", _("Attempting to install into an LVM PV that has not been initialized with a VG, but this is required."));
+        goto unable_to_embed;
+      }
+    #elif
 
     if (fs_probe)
       {
-        /* Doubt there can be any FS signature on LVM? */
-        if (!is_lvm && !fs && !ctx.dest_partmap)
+        if (!fs && !ctx.dest_partmap)
           grub_util_error (_("unable to identify a filesystem in %s; safety check can't be performed"), dest_dev->disk->name);
+          /* I personally don't know why an LVM or LDM should be checked for a filesystem, but this check currently runs for it ~DP. */
 
         if (fs && !fs->reserved_first_sector)
           /* TRANSLATORS: Filesystem may reserve the space just GRUB isn't sure about it. */
@@ -477,6 +487,7 @@ SETUP (const char *dir,
 	grub_util_warn ("%s", _("Attempting to install GRUB to a partitionless disk or to a partition.  This is a BAD idea."));
 	goto unable_to_embed;
       }
+    /* Particularly because if DID have a FS, it would error out here:    ~DP */
     if (ctx.multiple_partmaps || (ctx.dest_partmap && fs) || ((is_ldm || is_lvm) && fs))
       {
 	grub_util_warn ("%s", _("Attempting to install GRUB to a disk with multiple partition labels.  This is not supported yet."));
