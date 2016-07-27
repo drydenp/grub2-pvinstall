@@ -1,4 +1,4 @@
-/* biosdisk.h - emulate biosdisk */
+/* hostdisk.h - emulate biosdisk */
 /*
  *  GRUB  --  GRand Unified Bootloader
  *  Copyright (C) 2002,2007  Free Software Foundation, Inc.
