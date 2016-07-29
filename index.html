@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html>
+
+  <head>
+    <meta charset='utf-8'>
+    <meta http-equiv="X-UA-Compatible" content="chrome=1">
+    <meta name="description" content="Grub2-pvinstall : Contains code to install GRUB2 into an LVM PV">
+
+    <link rel="stylesheet" type="text/css" media="screen" href="stylesheets/stylesheet.css">
+
+    <title>Grub2-pvinstall</title>
+  </head>
+
+  <body>
+
+    <!-- HEADER -->
+    <div id="header_wrap" class="outer">
+        <header class="inner">
+          <a id="forkme_banner" href="https://github.com/drydenp/grub2-pvinstall">View on GitHub</a>
+
+          <h1 id="project_title">Grub2-pvinstall</h1>
+          <h2 id="project_tagline">Contains code to install GRUB2 into an LVM PV</h2>
+
+            <section id="downloads">
+              <a class="zip_download_link" href="https://github.com/drydenp/grub2-pvinstall/zipball/master">Download this project as a .zip file</a>
+              <a class="tar_download_link" href="https://github.com/drydenp/grub2-pvinstall/tarball/master">Download this project as a tar.gz file</a>
+            </section>
+        </header>
+    </div>
+
+    <!-- MAIN CONTENT -->
+    <div id="main_content_wrap" class="outer">
+      <section id="main_content" class="inner">
+        <p>= Grub2 LVM PV install =</p>
+
+<p>This fork contains the code to install GRUB2 directly on a LVM "physical volume".</p>
+
+<p>The main branch (master) is just the same as upstream branch master. The branch "pvinstall" contains the changes and is rebased on top of local master by rebasing the first meaningful commit and all that follow on top of it.</p>
+
+<p>== Building ==</p>
+
+<p>I am not going to include build instructions here now. I don't remember what packages I exactly installed (on Ubuntu) but they are not many, you don't need <em>everything</em> to build a basic GRUB. However, I did notice that <code>update-grub</code> was not compiled, for now you can just use the update-grub that comes with your distribution and only use <code>grub-install</code> from this one; by default it will install into /usr/local/.</p>
+
+<p>This is not using any Ubuntu build instructions. The complete set can be installed using:</p>
+
+<p>apt build-dep grub2 </p>
+
+<p>As of writing (2016-07-28) Ubuntu (16.04) still comes with a version (2.02beta2) that is at least as old as May, 2015. That means the source for Ubuntu is older than a year. The current patch should apply cleanly to Ubuntu sources though.</p>
+
+<p>To obtain a patch, you can create a diff agains the current HEAD of master.</p>
+
+<p>=== Patch of all the changes I've done ===</p>
+
+<p>git diff master pvinstall</p>
+
+<p>But this will include any irrelevant house-keeping changes. Not that it matters.</p>
+
+<p>A diff with only the most essential set of changes for the patch would have to be done against the last "housekeeping" commit from pvinstall. I just keep them in one branch although I could put the housekeeping changes in its own branch or just apply them to master. For now, I think this is cleaner.</p>
+
+<p>== Obtaining ==</p>
+
+<p>git clone <a href="https://github.com/drydenp/grub2-pvinstall.git">https://github.com/drydenp/grub2-pvinstall.git</a></p>
+
+<p>should fetch this repo and set up the remote origin</p>
+
+<p>git remote add upstream git://git.savannah.gnu.org/grub.git</p>
+
+<p>should add the ref to upstream</p>
+
+<p>== Maintenance ==</p>
+
+<p>=== Updating local master ===</p>
+
+<p>git fetch upstream
+ git checkout master
+ git merge upstream/master</p>
+
+<p>=== Rebasing changes on top of local master ===</p>
+
+<p>git checkout pvinstall
+ git rebase master</p>
+
+<p>=== Updating the Ubuntu branch ===</p>
+
+<p>Just assuming the Ubuntu sources will not change...</p>
+
+<p>git checkout pvinstall_ubuntu2.02beta2
+ # the last commit unique to the Ubuntu tree is tagged ubuntu_ignore</p>
+
+<p># reset previously cherry-picked commits:
+ git reset --hard ubuntu_ignore </p>
+
+<p># copy new commits over
+ git cherry-pick master..pvinstall</p>
+
+<p>Alternatively the commit that change the .ignore file is:</p>
+
+<p>git log --oneline .gitignore | head -1 | sed "s/ .<em>//"
+ git log --online | grep "\bIgnore$" | sed "s/ .</em>//"</p>
+
+<p>=== Replacing the Ubuntu sources ===</p>
+
+<p>You could do this by hand, but this works perfectly most of the time.</p>
+
+<p>The only time when it didn't was when a Vim .readme.wiki.swp had mysteriously made its way into the first commit ;-). That file, just as all files, should get removed with <code>git rm -rf .</code>. Rerunning the code wiped it and all was fine again. '''The complete sources of Ubuntu are stored prior to storing the .gitignore.''' I don't know what the point of that is, but that's the way it goes now. Below code leaves the branch empty of any new changes (my own commits). </p>
+
+<p>tmp=$( mktemp -d ) &amp;&amp; { 
+   cd $tmp &amp;&amp; apt source grub2 &amp;&amp; {
+     subdir=$( ls -d * --file-type | grep "/$" | sed 's@/$@@' ) &amp;&amp;
+     version=$( echo "$subdir" | sed "s/grub2-//" | tr -d '~' ) &amp;&amp; 
+     cd - &amp;&amp; git checkout --orphan pvinstall_ubuntu${version}_temp &amp;&amp; { 
+       git rm -rf --ignore-unmatch . &amp;&amp; mv $tmp/$subdir/* . &amp;&amp;
+       git add . &amp;&amp; git commit -m "Ubuntu sources $version" &amp;&amp;
+       git cherry-pick ubuntu_ignore &amp;&amp;
+       git branch -M pvinstall_ubuntu${version}_temp pvinstall_ubuntu${version} ||
+       git branch -D pvinstall_ubuntu${version}_temp
+     }<br>
+     rm -rf $tmp/*
+   }
+   rmdir $tmp
+ }</p>
+      </section>
+    </div>
+
+    <!-- FOOTER  -->
+    <div id="footer_wrap" class="outer">
+      <footer class="inner">
+        <p class="copyright">Grub2-pvinstall maintained by <a href="https://github.com/drydenp">drydenp</a></p>
+        <p>Published with <a href="https://pages.github.com">GitHub Pages</a></p>
+      </footer>
+    </div>
+
+    
+
+  </body>
+</html>
