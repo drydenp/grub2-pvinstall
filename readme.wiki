@@ -1,0 +1,86 @@
+= Grub2 LVM PV install =
+
+This fork contains the code to install GRUB2 directly on a LVM "physical volume".
+
+The main branch (master) is just the same as upstream branch master. The branch "pvinstall" contains the changes and is rebased on top of local master by rebasing the first meaningful commit and all that follow on top of it.
+
+== Building ==
+
+I am not going to include build instructions here now. I don't remember what packages I exactly installed (on Ubuntu) but they are not many, you don't need *everything* to build a basic GRUB. However, I did notice that <code>update-grub</code> was not compiled, for now you can just use the update-grub that comes with your distribution and only use <code>grub-install</code> from this one; by default it will install into /usr/local/.
+
+This is not using any Ubuntu build instructions. The complete set can be installed using:
+
+ apt build-dep grub2 
+
+As of writing (2016-07-28) Ubuntu (16.04) still comes with a version (2.02beta2) that is at least as old as May, 2015. That means the source for Ubuntu is older than a year. The current patch should apply cleanly to Ubuntu sources though.
+
+To obtain a patch, you can create a diff agains the current HEAD of master.
+
+=== Patch of all the changes I've done ===
+
+ git diff master pvinstall
+
+But this will include any irrelevant house-keeping changes. Not that it matters.
+
+A diff with only the most essential set of changes for the patch would have to be done against the last "housekeeping" commit from pvinstall. I just keep them in one branch although I could put the housekeeping changes in its own branch or just apply them to master. For now, I think this is cleaner.
+
+== Obtaining ==
+
+ git clone https://github.com/drydenp/grub2-pvinstall.git
+
+should fetch this repo and set up the remote origin
+
+ git remote add upstream git://git.savannah.gnu.org/grub.git
+
+should add the ref to upstream
+
+== Maintenance ==
+
+=== Updating local master ===
+
+ git fetch upstream
+ git checkout master
+ git merge upstream/master
+
+=== Rebasing changes on top of local master ===
+
+ git checkout pvinstall
+ git rebase master
+
+=== Updating the Ubuntu branch ===
+
+Just assuming the Ubuntu sources will not change...
+
+ git checkout pvinstall_ubuntu2.02beta2
+ # the last commit unique to the Ubuntu tree is tagged ubuntu_ignore
+
+ # reset previously cherry-picked commits:
+ git reset --hard ubuntu_ignore 
+
+ # copy new commits over
+ git cherry-pick master..pvinstall
+
+Alternatively the commit that change the .ignore file is:
+
+ git log --oneline .gitignore | head -1 | sed "s/ .*//"
+ git log --online | grep "\bIgnore$" | sed "s/ .*//"
+
+=== Replacing the Ubuntu sources ===
+
+ tmp=$( mktemp -d ) && { 
+   cd $tmp && apt source grub2 && {
+     subdir=$( ls -d * --file-type | grep "/$" | sed 's@/$@@' ) &&
+     version=$( echo "$subdir" | sed "s/grub2-//" | tr -d '~' ) && 
+     cd - && git checkout --orphan pvinstall_ubuntu${version}_temp && { 
+       git rm -rf --ignore-unmatch . && mv $tmp/$subdir/* . &&
+       git add . && git commit -m "Ubuntu sources $version" &&
+       git cherry-pick ubuntu_ignore &&
+       git branch -M pvinstall_ubuntu${version}_temp pvinstall_ubuntu${version} ||
+       git branch -D pvinstall_ubuntu${version}_temp
+     }  
+     rm -rf $tmp/*
+   }
+   rmdir $tmp
+ }
+
+
