@@ -67,6 +67,10 @@ Alternatively the commit that change the .ignore file is:
 
 === Replacing the Ubuntu sources ===
 
+You could do this by hand, but this works perfectly most of the time.
+
+The only time when it didn't was when a Vim .readme.wiki.swp had mysteriously made its way into the first commit ;-). That file, just as all files, should get removed with <code>git rm -rf .</code>. Rerunning the code wiped it and all was fine again. '''The complete sources of Ubuntu are stored prior to storing the .gitignore.''' I don't know what the point of that is, but that's the way it goes now. Below code leaves the branch empty of any new changes (my own commits). 
+
  tmp=$( mktemp -d ) && { 
    cd $tmp && apt source grub2 && {
      subdir=$( ls -d * --file-type | grep "/$" | sed 's@/$@@' ) &&
