@@ -125,9 +125,7 @@ grub_lvm_get_pvh_at(grub_disk_t disk, char buf[static GRUB_LVM_LABEL_SIZE],
        break;
     }
 
-#ifdef GRUB_UTIL
   if (first_sector) *first_sector = 0;
-#endif
 
   /* Return if we didn't find a label. */
   if (i == GRUB_LVM_LABEL_SCAN_SECTORS)
@@ -137,14 +135,29 @@ grub_lvm_get_pvh_at(grub_disk_t disk, char buf[static GRUB_LVM_LABEL_SIZE],
 #endif
       return NULL;
     }
-  else if (i == 0)
+  else if (i == 0 && first_sector) /* that's whether the pointer is usable */
     {
+      *first_sector = 1;
 #ifdef GRUB_UTIL
-      /* currently only prints when the caller requests first_sector information
-         e.g. this happens when installing, but not before */
-      if (first_sector) grub_util_info ("LVM signature in first sector");
+      /* prints message and only prints message if first_sector feedback was
+         requested. Ie. someone who doesn't care will not trigger grub_util_info
+         output. Ideally perhaps this first_sector issue is dissolved and
+         discovered the moment of first scanning. But the way it is now it will
+         pass initial checks because it might be hard to incorporate this info
+         in the first call (that is not a direct call). We can however
+         incorporate it in grub_util_has_lvm_pv which is only getting called by
+         setup.c. So the choice is between: do we let the installer bug out, or
+         do we catch it before we even try to install? */
+
+      /* All the same the first person that deals with it is also going to be
+         the one that wants to see the output message displayed on screen (with
+         verbose output). */
+
+      /* Ideally though perhaps we'd want a verbose flag to direct this output.
+         Practically, I don't think it would matter. */
+
+      grub_util_info ("LVM signature in first sector");
 #endif
-      if (first_sector) *first_sector = 1;
     }
 
   return (struct grub_lvm_pv_header *) (buf + grub_le_to_cpu32(lh->offset_xl));
@@ -876,11 +889,9 @@ grub_util_lvm_embed (struct grub_disk *disk, unsigned int *nsectors,
   if (embed_type != GRUB_EMBED_PCBIOS)
     return grub_error (GRUB_ERR_NOT_IMPLEMENTED_YET,
                       "LVM curently supports only PC-BIOS embedding");
-#ifdef GRUB_UTIL
-  pvh = grub_lvm_get_pvh_at(disk, buf, &first_sector, 1);
-#else
+
   pvh = grub_lvm_get_pvh_at(disk, buf, &first_sector);
-#endif
+
   /* if pvh is NULL, we probably have a bug */
   if (!pvh)
     return grub_error (GRUB_ERR_BUG, "attempt to install on non-existent PV header (should not happen)");

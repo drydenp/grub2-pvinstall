@@ -441,7 +441,7 @@ SETUP (const char *dir,
         grub_util_warn ("%s", _("Attempting to install into an LVM PV that has not been initialized with a VG, but this is required."));
         goto unable_to_embed;
       }
-    #elif
+    #endif
 
     if (fs_probe)
       {
