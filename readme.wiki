@@ -89,8 +89,8 @@ It does the following:
 * add it with a commit message
 * commit the ubuntu_ignore commit that will create a .gitignore file
 * update the newly created commit to reference the tag
-* update the symbolic reference "ubuntu"
 * move the temporary branch to a branch with the ubuntu version in it
+* update the symbolic reference "ubuntu"
 * remove remaining temporary files and the tmp directory
 
 After this you will have a new "Ubuntu source" branch named after the version with the full set of files from the download as the initial commit and an ignore file as the second commit. At that point you can copy commits to it from pvinstall if that is what you were intending to do.
