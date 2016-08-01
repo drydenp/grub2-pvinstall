@@ -107,8 +107,10 @@ The only time when it didn't was when a Vim .readme.wiki.swp had mysteriously ma
        } ||
        git branch -D pvinstall_ubuntu${version}_temp
        [ $oldbranch ] && {
-         echo "Your old branch was stashed because the working directory was not clean. Changing back to $oldbranch now and popping changes"
-         git checkout $oldbranch && { git stash pop || echo "Popping failed, take care"; } || { echo "Checking out failed, there should be changes in your stash"; }
+         echo "Your old branch was stashed because the working directory was not clean." \
+              "Changing back to $oldbranch now and popping changes"
+         git checkout $oldbranch && { git stash pop || echo "Popping failed, take care"; } || 
+           { echo "Checking out failed, there should be changes in your stash"; }
        }
      }  
      rm -rf $tmp/*
