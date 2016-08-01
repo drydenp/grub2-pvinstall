@@ -2,19 +2,21 @@
 
 This fork contains the code to install GRUB2 directly on a LVM "physical volume".
 
-The main branch (master) is just the same as upstream branch master. The branch "pvinstall" contains the changes and is rebased on top of local master by rebasing the first meaningful commit and all that follow on top of it.
+The main branch (master) only contains the readme and scripts, but the "real" main branch is "savannah" currently and points to upstream branch master. The branch "pvinstall" in contrast contains the changes and is rebased on top of local master to ensure that my commits are always at the top of "master". Hence savannah is just identical to upstream/master and pvinstall is rebased op top of "savannah". Hence it is just the simplest of rebase operations.
+
+"Savannah" should always be identical to upstream so it doesn't matter how you merge them, it should always be a fast forward merge unless they remove shit remotely. In that case perhaps a forced clone might work, I don't know.
 
 == Building ==
 
-I am not going to include build instructions here now. I don't remember what packages I exactly installed (on Ubuntu) but they are not many, you don't need *everything* to build a basic GRUB. However, I did notice that <code>update-grub</code> was not compiled, for now you can just use the update-grub that comes with your distribution and only use <code>grub-install</code> from this one; by default it will install into /usr/local/.
+Building is easy peasy and although there are dedicated packages you need most, I will just say that <code>apt build-dep grub2</code> will install anything and everything on Ubuntu unless you care about hard disk space but then it will still do it. I thought most of that space requirement went in to the Qemu packages though. That's some 171MB of stuff you will not use. 
 
-This is not using any Ubuntu build instructions. The complete set can be installed using:
+It's just that Ubuntu (Debian) contains other stuff such as the update-grub script which you could just copy, and I'm sure you could build it using their package scripts.
 
- apt build-dep grub2 
+Ubuntu's base version of Grub2 is at least as old as January, 2014. They backport patches from upstream whenever they feel like it. The last backported patch (and also the last patch they have) is from January 20 (2016).
 
-As of writing (2016-07-28) Ubuntu (16.04) still comes with a version (2.02beta2) that is at least as old as May, 2015. That means the source for Ubuntu is older than a year. The current patch should apply cleanly to Ubuntu sources though.
+My current patches apply cleanly to the Ubuntu base though.
 
-To obtain a patch, you can create a diff agains the current HEAD of master.
+To obtain a patch of my work, you can create a diff against the "savannah" branch (the way it is now).
 
 === Patch of all the changes I've done ===
 
@@ -27,31 +29,42 @@ A diff with only the most essential set of changes for the patch would have to b
 == Obtaining ==
 
  git clone https://github.com/drydenp/grub2-pvinstall.git
+ cd grub2-pvinstall
 
 should fetch this repo and set up the remote origin
 
  git remote add upstream git://git.savannah.gnu.org/grub.git
+ git fetch upstream master
 
-should add the ref to upstream
+should add the ref to upstream and fetch master so that:
+
+ git branch -t savannah upstream/master
+ 
+will set up local savannah to track it. This means savannah is not part of github (insofarasmuch that it is part of pvinstall).
+
+ git symbolic-ref refs/heads/ubuntu refs/heads/pvinstall_ubuntu2.02beta2
+
+will create a local symbolic reference to the ubuntu branch if you want that.
 
 == Maintenance ==
 
-=== Updating local master ===
+=== Updating local savannah ===
 
- git fetch upstream
  git checkout savannah
- git merge upstream/master
+ git pull
 
-=== Rebasing changes on top of local master ===
+=== Rebasing changes on top of local savannah ===
 
  git checkout pvinstall
  git rebase savannah
 
 === Updating the Ubuntu branch ===
 
-Just assuming the Ubuntu sources will not change...
+The ubuntu branch is actually named in full "pvinstall_ubuntu2.02beta2" but as you have seen I have created a local symbolic reference called "ubuntu". This also gets updated by the below script that updates the Ubuntu source.
 
- git checkout pvinstall_ubuntu2.02beta2
+In order to update the Ubuntu branch with my commits:
+
+ git checkout ubuntu
  # the last commit unique to the Ubuntu tree is tagged ubuntu_ignore
 
  # reset previously cherry-picked commits:
@@ -67,22 +80,40 @@ Alternatively the commit that change the .ignore file is:
 
 === Replacing the Ubuntu sources ===
 
-You could do this by hand, but this works perfectly most of the time.
+You could do this by hand, but this works perfectly.
+
+It does the following:
+* fetch the latest grub2 source
+* find its version number
+* create a new branch for it
+* empty the branch and remove all untracked files except ignored files (take care, that that would wipe all untracked files and changes. 
 
 The only time when it didn't was when a Vim .readme.wiki.swp had mysteriously made its way into the first commit ;-). That file, just as all files, should get removed with <code>git rm -rf .</code>. Rerunning the code wiped it and all was fine again. '''The complete sources of Ubuntu are stored prior to storing the .gitignore.''' I don't know what the point of that is, but that's the way it goes now. Below code leaves the branch empty of any new changes (my own commits). 
 
  tmp=$( mktemp -d ) && { 
    cd $tmp && apt source grub2 && {
      subdir=$( ls -d * --file-type | grep "/$" | sed 's@/$@@' ) &&
-     version=$( echo "$subdir" | sed "s/grub2-//" | tr -d '~' ) && 
-     cd - && git checkout --orphan pvinstall_ubuntu${version}_temp && { 
-       git rm -rf --ignore-unmatch . && mv $tmp/$subdir/* . &&
+     version=$( echo "$subdir" | sed "s/grub2-//" | tr -d '~' ) &&
+     cd - && [ -z "$( git status -s )" ] && unset oldbranch || {
+       oldbranch=$( git symbolic-ref HEAD --short ) && git stash -a || {
+         echo "Cannot stash changes; exiting procedure"; false
+       }
+     } && git checkout --orphan pvinstall_ubuntu${version}_temp && { 
+       git rm -rf --ignore-unmatch . && git clean -df && mv $tmp/$subdir/* . &&
        git add . && git commit -m "Ubuntu sources $version" &&
-       git cherry-pick ubuntu_ignore &&
-       git branch -M pvinstall_ubuntu${version}_temp pvinstall_ubuntu${version} ||
+       git cherry-pick ubuntu_ignore && {
+         git branch -M pvinstall_ubuntu${version}_temp pvinstall_ubuntu${version} &&
+         { git symbolic-ref refs/heads/ubuntu refs/heads/pvinstall_ubuntu${version}; true; }
+       } ||
        git branch -D pvinstall_ubuntu${version}_temp
+       [ $oldbranch ] && {
+         echo "Your old branch was stashed because the working directory was not clean. Changing back to $oldbranch now and popping changes"
+         git checkout $oldbranch && { git stash pop || echo "Popping failed, take care"; } || { echo "Checking out failed, there should be changes in your stash"; }
+       }
      }  
      rm -rf $tmp/*
    }
    rmdir $tmp
  }
+
+This has too much safeguard code. I am just going to exit if there are unstaged changes, next time. And untracked files.
