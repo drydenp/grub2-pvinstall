@@ -39,7 +39,7 @@ should fetch this repo and set up the remote origin
 should add the ref to upstream and fetch master so that:
 
  git branch -t savannah upstream/master
- 
+
 will set up local savannah to track it. This means savannah is not part of github (insofarasmuch that it is part of pvinstall).
 
  git symbolic-ref refs/heads/ubuntu refs/heads/pvinstall_ubuntu2.02beta2
