@@ -88,6 +88,8 @@ It does the following:
 * move the Ubuntu sources to it
 * add it with a commit message
 * commit the ubuntu_ignore commit that will create a .gitignore file
+* update the newly created commit to reference the tag
+* update the symbolic reference "ubuntu"
 * move the temporary branch to a branch with the ubuntu version in it
 * remove remaining temporary files and the tmp directory
 
@@ -106,7 +108,8 @@ I do not maintain that branch that way though, so what you will see online or if
      } && git checkout --orphan pvinstall_ubuntu${version}_temp && { 
        git rm -rf --ignore-unmatch . && git clean -df && mv $tmp/$subdir/* . &&
        git add . && git commit -m "Ubuntu sources $version" &&
-       git cherry-pick ubuntu_ignore && {
+       git cherry-pick ubuntu_ignore &&
+       git tag -af ubuntu_ignore -m "Tag pointing to most recent Ubuntu .gitignore commit" {
          git branch -M pvinstall_ubuntu${version}_temp pvinstall_ubuntu${version} &&
          { git symbolic-ref refs/heads/ubuntu refs/heads/pvinstall_ubuntu${version}; true; }
        } ||
