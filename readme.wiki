@@ -29,22 +29,19 @@ A diff with only the most essential set of changes for the patch would have to b
 == Obtaining ==
 
  git clone https://github.com/drydenp/grub2-pvinstall.git
- cd grub2-pvinstall
 
 should fetch this repo and set up the remote origin
 
+ cd grub2-pvinstall
  git remote add upstream git://git.savannah.gnu.org/grub.git
  git fetch upstream master
-
-should add the ref to upstream and fetch master so that:
-
  git branch -t savannah upstream/master
 
-will set up local savannah to track it. This means savannah is not part of github (insofarasmuch that it is part of pvinstall).
+will set up upstream and create a local branch savannah to track it. Savannah is not stored here on Github as a consequenc.
+
+To have convenient access to the ubuntu branch you must do:
 
  git symbolic-ref refs/heads/ubuntu refs/heads/pvinstall_ubuntu2.02beta2
-
-will create a local symbolic reference to the ubuntu branch if you want that.
 
 == Maintenance ==
 
@@ -85,10 +82,18 @@ You could do this by hand, but this works perfectly.
 It does the following:
 * fetch the latest grub2 source
 * find its version number
+* stash any changes in the working dir
 * create a new branch for it
-* empty the branch and remove all untracked files except ignored files (take care, that that would wipe all untracked files and changes. 
+* empty the branch and remove all untracked files except ignored files
+* move the Ubuntu sources to it
+* add it with a commit message
+* commit the ubuntu_ignore commit that will create a .gitignore file
+* move the temporary branch to a branch with the ubuntu version in it
+* remove remaining temporary files and the tmp directory
 
-The only time when it didn't was when a Vim .readme.wiki.swp had mysteriously made its way into the first commit ;-). That file, just as all files, should get removed with <code>git rm -rf .</code>. Rerunning the code wiped it and all was fine again. '''The complete sources of Ubuntu are stored prior to storing the .gitignore.''' I don't know what the point of that is, but that's the way it goes now. Below code leaves the branch empty of any new changes (my own commits). 
+After this you will have a new "Ubuntu source" branch named after the version with the full set of files from the download as the initial commit and an ignore file as the second commit. At that point you can copy commits to it from pvinstall if that is what you were intending to do.
+
+I do not maintain that branch that way though, so what you will see online or if you clone it will be the "bare" Ubuntu branch/repo.
 
  tmp=$( mktemp -d ) && { 
    cd $tmp && apt source grub2 && {
@@ -118,4 +123,4 @@ The only time when it didn't was when a Vim .readme.wiki.swp had mysteriously ma
    rmdir $tmp
  }
 
-This has too much safeguard code. I am just going to exit if there are unstaged changes, next time. And untracked files.
+I could remove the stashing code to make it leaner again. At that point I would just need to fail when the working directory is not clean.
