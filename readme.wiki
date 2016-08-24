@@ -113,6 +113,7 @@ I do not maintain that branch that way though, so what you will see online or if
      }
    fi
  }
+ 
  revert_stash() {
    echo "Your old branch was stashed because the working directory was not clean." \
      "Changing back to $oldbranch now and popping changes"
