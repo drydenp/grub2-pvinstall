@@ -97,33 +97,48 @@ After this you will have a new "Ubuntu source" branch named after the version wi
 
 I do not maintain that branch that way though, so what you will see online or if you clone it will be the "bare" Ubuntu branch/repo.
 
+ ask_for_stash() {
+   local answer
+   echo "You have changes in your working directory. Aborting procedure"
+   echo -e "\nExecute git stash -a to stash changes. Do you want me to do it for you?"
+   read -ep "stash changes [y/n]: " answer
+   if [ "$answer" = "y" ]; then
+     echo "Saving current branch"
+     oldbranch=$( git symbolic-ref HEAD --short ) && {
+       echo "Stashing changes..."
+       git stash -a
+     } || {
+       echo "Failed to stash. Need to abort now."
+       false
+     }
+   fi
+ }
+ revert_stash() {
+   echo "Your old branch was stashed because the working directory was not clean." \
+     "Changing back to $oldbranch now and popping changes"
+   git checkout $oldbranch && { git stash pop || echo "Popping failed, take care"; } ||
+     echo "Checking out failed, there should be changes in your stash"
+ }
+ 
  tmp=$( mktemp -d ) && { 
    cd $tmp && apt source grub2 && {
      subdir=$( ls -d * --file-type | grep "/$" | sed 's@/$@@' ) &&
      version=$( echo "$subdir" | sed "s/grub2-//" | tr -d '~' ) &&
-     cd - && [ -z "$( git status -s )" ] && unset oldbranch || {
-       oldbranch=$( git symbolic-ref HEAD --short ) && git stash -a || {
-         echo "Cannot stash changes; exiting procedure"; false
-       }
-     } && git checkout --orphan pvinstall_ubuntu${version}_temp && { 
+     cd - && [ -z "$( git status -s )" ] || ask_for_stash && 
+       git checkout --orphan pvinstall_ubuntu${version}_temp && { 
        git rm -rf --ignore-unmatch . && git clean -df && mv $tmp/$subdir/* . &&
        git add . && git commit -m "Ubuntu sources $version" &&
        git cherry-pick ubuntu_ignore &&
-       git tag -af ubuntu_ignore -m "Tag pointing to most recent Ubuntu .gitignore commit" {
+       git tag -af ubuntu_ignore -m "Tag pointing to most recent Ubuntu .gitignore commit" && {
          git branch -M pvinstall_ubuntu${version}_temp pvinstall_ubuntu${version} &&
          { git symbolic-ref refs/heads/ubuntu refs/heads/pvinstall_ubuntu${version}; true; }
        } ||
        git branch -D pvinstall_ubuntu${version}_temp
-       [ $oldbranch ] && {
-         echo "Your old branch was stashed because the working directory was not clean." \
-              "Changing back to $oldbranch now and popping changes"
-         git checkout $oldbranch && { git stash pop || echo "Popping failed, take care"; } || 
-           { echo "Checking out failed, there should be changes in your stash"; }
-       }
+       [ $oldbranch ] && revert_stash
      }  
      rm -rf $tmp/*
    }
    rmdir $tmp
  }
 
-I could remove the stashing code to make it leaner again. At that point I would just need to fail when the working directory is not clean.
+I just put that stashing code into its own functions for now. Without those functions it will just abort. I was actually meaning to ''reduce'' the mount of safety code, but instead I increased it :-/.
