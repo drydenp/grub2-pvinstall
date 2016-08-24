@@ -113,14 +113,14 @@ I do not maintain that branch that way though, so what you will see online or if
      }
    fi
  }
- 
+
  revert_stash() {
    echo "Your old branch was stashed because the working directory was not clean." \
      "Changing back to $oldbranch now and popping changes"
    git checkout $oldbranch && { git stash pop || echo "Popping failed, take care"; } ||
      echo "Checking out failed, there should be changes in your stash"
  }
- 
+
  tmp=$( mktemp -d ) && { 
    cd $tmp && apt source grub2 && {
      subdir=$( ls -d * --file-type | grep "/$" | sed 's@/$@@' ) &&
