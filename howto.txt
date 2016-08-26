@@ -1,0 +1,12 @@
+This repo has 3 branches.
+
+"savannah" currently is upstream git://git.savannah.gnu.org/grub.git/master, it is just not pushed to Github.
+"pvinstall" is based on that master branch with added commits for the patch (feature)
+"master" is the branch you are currently seeing that contains the readme and/or scripts.
+
+Upon checkout you will be in *master*. To see something, anything, you must check out pvinstall.
+
+Follow instructions in the readme.wiki to setup upstream/master to savannah, and to be able to rebase
+pvinstall on top of upstream/master.
+
+A patch is generated with git diff savannah..pvinstall, as it says.
