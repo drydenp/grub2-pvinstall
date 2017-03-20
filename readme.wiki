@@ -111,19 +111,13 @@ The ubuntu branch is actually named in full "pvinstall_ubuntu2.02beta2" but as y
 
 In order to update the Ubuntu branch with my commits:
 
- git checkout ubuntu
- # the last commit unique to the Ubuntu tree is tagged ubuntu_ignore
+ git checkout ubuntu                    # I have tagged the "split-off" point "ubuntu_ignore"
+ git reset --hard ubuntu_ignore         # Remove any commits I have copied over from pvinstall previously
+ git cherry-pick savannah..pvinstall    # Copy commits from pvinstall onto the Ubuntu sources
 
- # reset previously cherry-picked commits:
- git reset --hard ubuntu_ignore 
-
- # copy new commits over
- git cherry-pick savannah..pvinstall
-
-Alternatively the commit that change the .ignore file is:
+An alternative way of finding the commit that changed the .gitignore file is:
 
  git log --oneline .gitignore | head -1 | sed "s/ .*//"
- git log --online | grep "\bIgnore$" | sed "s/ .*//"
 
 === Replacing the Ubuntu sources ===
 
