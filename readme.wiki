@@ -1,31 +1,32 @@
 = Grub2 LVM PV install =
 
-This fork contains the code to install GRUB2 directly on a LVM "physical volume".
+This fork contains the code to install GRUB2 directly on a LVM "physical volume" in a '''partitionless''' disk.
+
+That means you would have '''no''' partitions and ONLY a PV on that disk in the 2nd, 3rd or 4th sector of the disk. The second sector is the default for a PV so we can say that this patch enables installation of Grub2 into a PV that was created normally with an additional flag (--bootloaderareasize 1M, as detailed below) but in its default location. 
 
 == Intro ==
 
-All the code is currently in pvinstall branch. You must do:
+This fork has the code sitting in the <code>pvinstall</code> branch of this repo. To checkout the code you must do:
 
   git clone https://github.com/drydenp/grub2-pvinstall.git
   cd grub2-pvinstall
   git checkout pvinstall
 
-To get at it.
+to get at it. This branch contains '''all''' code. To see the diff against the 'master' branch you must do:
 
-== Branches ==
+  git diff upstream/master..pvinstall
 
- * master: contains this readme
- * savannah: contains the upstream sources        (not on GitHub)
+after setting it up as detailed below.
+
+== Branches of this repo ==
+
+ * master:    contains this readme
+ * savannah:  contains the upstream sources       (not on GitHub)
  * pvinstall: contains the modifications          (on GitHub)
 
-Below is how to actually set the thing up for development. The <code>master</code> branch contains these howtos and (scripts). You will point "savannah" to upstream-master if you want to retrieve the latest "base". The "pvinstall" branch contains the changes.
+You will find below instructions on how to actually set this up for development or maintenance. This master branch that you see now contains only documentation and possibly scripts. <code>savannah</code> is going to be set to point to <code>upstream/master</code>. The <code>pvinstall</code> branch will contain the latest changes, notably rebased on top of "savannah" usually.
 
-<code>pvinstall</code> is rebased on top of <code>savannah</code> which is updated with remote (upstream) master.
-
-So:
-
-  savannah == upstream/master
-  pvinstall == rebased on top of savannah
+Normally "savannah" would be up to date with upstream master and contain no additional changes.
 
 == Status ==
 
@@ -35,18 +36,19 @@ Upstream Grub2 just released GRUB 2.02rc2 (five days ago, 15-03-2017) and I have
 
 This (little) project is aimed at ensuring that Grub can detect and make use of a LVM2 "Physical Volume" in which space Grub2 core boot loader can be installed. A LVM2 "Physical Volume" typically reserves the boot loader area (first sector of 512 bytes) for a boot loader and installs itself (the Physical Volume header) in the 2nd sector and beyond. A Physical Volume created with
 
-  --bootloaderareasize 1M
+  pvcreate <parameters> --bootloaderareasize 1M
 
-would be capable of having this Grub2 core.img installed in it. The boot.img then generally goes into the normal bootsector (first sector on the drive). This code below (this repo, this patch) is meant to ensure detection of this Physical Volume and installation into it.
+is capable of having the GRUB2 core.img installed into it, that is to say that this extra space is needed for the installation of Grub.
 
-This patch is not complete. It works perfectly but cannot detect some failure conditions entirely properly. I have not yet had the required time or help from the Grub2 team to properly know what else this Patch should do. Two questions remain in particular:
+The code below (I mean this repo) is intended to provide the necessary functionality for detecting and verifying and installing into this extra space.
+
+This patch is still a work in progress (why else have this site) but I have not yet had enough time, patience, arduous labour, and help from the Grub2 team (most notably Andrei Borzenkov, who did help me get started) to finish it. This patch operates perfectly but requires a little more sanity checking.
+
+There are three questions remaining:
 
 # How to properly detect leftover "garbage" from a previous PV that _was_ suitable to prevent installation into a PV that _is not currently suitable_
 # Whether installation into a PV that does not yet have any VGs should be allowed
-
-And also:
-
-# Whether we should allow installation without the -s flag (Andrei Borkenzov was against it).
+# Whether we should allow installation without the -s flag (Andrei was against it).
 
 These are really the only questions. The patch currently works.
 
