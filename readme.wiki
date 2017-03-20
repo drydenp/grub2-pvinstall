@@ -2,9 +2,57 @@
 
 This fork contains the code to install GRUB2 directly on a LVM "physical volume".
 
-The main branch (master) only contains the readme and scripts, but the "real" main branch is "savannah" currently and points to upstream branch master. The branch "pvinstall" in contrast contains the changes and is rebased on top of local master to ensure that my commits are always at the top of "master". Hence savannah is just identical to upstream/master and pvinstall is rebased op top of "savannah". Hence it is just the simplest of rebase operations.
+== Intro ==
 
-"Savannah" should always be identical to upstream so it doesn't matter how you merge them, it should always be a fast forward merge unless they remove shit remotely. In that case perhaps a forced clone might work, I don't know.
+All the code is currently in pvinstall branch. You must do:
+
+  git clone https://github.com/drydenp/grub2-pvinstall.git
+  cd grub2-pvinstall
+  git checkout pvinstall
+
+To get at it.
+
+== Branches ==
+
+ * master: contains this readme
+ * savannah: contains the upstream sources        (not on GitHub)
+ * pvinstall: contains the modifications          (on GitHub)
+
+Below is how to actually set the thing up for development. The <code>master</code> branch contains these howtos and (scripts). You will point "savannah" to upstream-master if you want to retrieve the latest "base". The "pvinstall" branch contains the changes.
+
+<code>pvinstall</code> is rebased on top of <code>savannah</code> which is updated with remote (upstream) master.
+
+So:
+
+  savannah == upstream/master
+  pvinstall == rebased on top of savannah
+
+== Status ==
+
+Upstream Grub2 just released GRUB 2.02rc2 (five days ago, 15-03-2017) and I haven't updated this repo in a while. Ideally it should be up to date with remote GRUB but I don't know if it applies cleanly at this point. Once GRUB 2.02 is released I will definitely try to find some time to at least get this up to date again and see if it cleanly applies, and make sure it does.
+
+== Overview ==
+
+This (little) project is aimed at ensuring that Grub can detect and make use of a LVM2 "Physical Volume" in which space Grub2 core boot loader can be installed. A LVM2 "Physical Volume" typically reserves the boot loader area (first sector of 512 bytes) for a boot loader and installs itself (the Physical Volume header) in the 2nd sector and beyond. A Physical Volume created with
+
+  --bootloaderareasize 1M
+
+would be capable of having this Grub2 core.img installed in it. The boot.img then generally goes into the normal bootsector (first sector on the drive). This code below (this repo, this patch) is meant to ensure detection of this Physical Volume and installation into it.
+
+This patch is not complete. It works perfectly but cannot detect some failure conditions entirely properly. I have not yet had the required time or help from the Grub2 team to properly know what else this Patch should do. Two questions remain in particular:
+
+# How to properly detect leftover "garbage" from a previous PV that _was_ suitable to prevent installation into a PV that _is not currently suitable_
+# Whether installation into a PV that does not yet have any VGs should be allowed
+
+And also:
+
+# Whether we should allow installation without the -s flag (Andrei Borkenzov was against it).
+
+These are really the only questions. The patch currently works.
+
+It's been in use (by me) for quite some time, never had issues.
+
+'''Additionally''' the <code>util-linux</code> team updated <code>libblkid</code> to allow detection of a PV even if the bootsector already contains a bootloader (as would be the case with our patch) in their version 2.29. This version is not yet included in Xenial (16.10) of Ubuntu, but it is included in the upcoming Zesty (17.04). This version is required for auto-activation of physical volumes using the '''<code>udev</code>''' mechanism, which is the default for all SystemD systems.
 
 == Building ==
 
